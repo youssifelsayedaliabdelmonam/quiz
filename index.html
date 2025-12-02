@@ -160,7 +160,6 @@
                 console.error("Firebase config not found. Running in offline/no-persistence mode.");
                 state.isAuthReady = false; 
                 state.screen = 'register';
-                state.errorMessage = 'تحذير: لا يمكن الاتصال بخدمات التخزين. لن يتم حفظ نتائجك.';
                 render();
             }
         } catch (e) {
@@ -674,13 +673,7 @@
                 <p class="text-center text-gray-600 mb-8">الرجاء تسجيل بياناتك لبدء الاختبار (المدة: 45 دقيقة).</p>
 
                 ${state.errorMessage ? `<p id="error-message" class="text-red-500 text-sm mt-2 text-center bg-red-100 p-2 rounded-lg mb-4">${state.errorMessage}</p>` : `<p id="error-message" class="hidden"></p>`}
-                
-                ${!state.isAuthReady ? `
-                    <div class="p-3 bg-yellow-100 text-yellow-800 rounded-lg text-sm text-center mb-4 border border-yellow-300">
-                         لا يمكن الاتصال بخدمات التخزين الآن. لن يتم حفظ نتائجك تلقائياً عند تقديم الاختبار.
-                    </div>
-                ` : ''}
-
+             
 
                 <form id="register-form" class="space-y-6">
                     <div>
