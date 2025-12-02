@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>اختبار الحاسوب المتكامل</title>
+    <!-- تضمين Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        /* لضمان استخدام خط عربي أنيق */
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap');
+        body {
+            font-family: 'Cairo', sans-serif;
+            background-color: #f7f9fb;
+        }
+        .container-card {
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.08);
+        }
+        .timer-display {
+            /* لضمان ثبات الأرقام عند تغيير الوقت */
+            font-variant-numeric: tabular-nums; 
+        }
+        .correct-answer {
+            background-color: #d1fae5; /* أخضر فاتح */
+            border-right: 4px solid #10b981; 
+        }
+        .incorrect-answer {
+            background-color: #fee2e2; /* أحمر فاتح */
+            border-right: 4px solid #ef4444; 
+        }
+        .user-selected-mcq {
+            background-color: #bfdbfe; /* أزرق فاتح */
+            font-weight: 600;
+        }
+        .question-block:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8 flex items-center justify-center">
+
+<div id="app" class="w-full max-w-4xl">
+    <!-- حاوية التطبيق الرئيسية سيتم ملؤها ديناميكياً -->
+</div>
+
+<script type="module">
+    // --- استيرادات Firebase والخدمات المساعدة ---
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, setDoc, getDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // --- الثوابت والبيانات الأولية ---
+    const EXAM_DURATION = 45 * 60; // 45 دقيقة بالثواني = 2700 ثانية
+    const GEMINI_API_KEY = ""; // مفتاح API لـ Gemini
+
+    // أسئلة الاختيارات المتعددة (MCQ) - 20 سؤال
+    const mcqQuestions = [
+        { id: 1, text: 'First-generation computers used:', options: ['Vacuum Tubes', 'Transistors', 'ICs', 'Microprocessors'], correct: 'Vacuum Tubes' },
+        { id: 2, text: 'Fifth-generation computers are mainly based on:', options: ['AI', 'ICs', 'Assembly language', 'Transistors'], correct: 'AI' },
+        { id: 3, text: 'The fastest type of computer is the:', options: ['Microcomputer', 'Minicomputer', 'Mainframe', 'Supercomputer'], correct: 'Supercomputer' },
+        { id: 4, text: 'The component responsible for arithmetic and logic operations is:', options: ['CU', 'ALU', 'Cache', 'Registers'], correct: 'ALU' },
+        { id: 5, text: 'Which type of memory is volatile?', options: ['ROM', 'RAM', 'Hard Disk', 'SSD'], correct: 'RAM' },
+        { id: 6, text: 'Cache memory is used to store:', options: ['Program files', 'Frequently used data', 'Operating system', 'User data'], correct: 'Frequently used data' },
+        { id: 7, text: 'Which of the following stores BIOS?', options: ['RAM', 'ROM', 'Cache', 'Hard Disk'], correct: 'ROM' },
+        { id: 8, text: 'Computer speed is measured in:', options: ['Bytes', 'Hertz', 'Watts', 'Pixels'], correct: 'Hertz' },
+        { id: 9, text: 'The correct instruction cycle order is:', options: ['Fetch → Decode → Execute', 'Decode → Execute → Fetch', 'Execute → Fetch → Decode', 'Fetch → Execute → Decode'], correct: 'Fetch → Decode → Execute' },
+        { id: 10, text: 'Which device is both input and output?', options: ['Touch screen', 'Scanner', 'Printer', 'Keyboard'], correct: 'Touch screen' },
+        // أسئلة التحويلات الرقمية
+        { id: 11, text: 'What is the binary representation of decimal 47?', options: ['110111', '101111', '110011', '111001'], correct: '101111' },
+        { id: 12, text: 'The binary equivalent of hexadecimal A2 is:', options: ['10100010', '10010001', '11100010', '10101010'], correct: '10100010' },
+        { id: 13, text: 'The binary representation of hexadecimal 3D is:', options: ['00111101', '01010101', '01110011', '01011100'], correct: '00111101' },
+        { id: 14, text: 'The decimal value of octal 57 is:', options: ['46', '47', '48', '55'], correct: '47' },
+        { id: 15, text: 'The binary equivalent of octal 45 is:', options: ['100101', '101110', '101101', '100110'], correct: '100101' }, 
+        { id: 16, text: 'The result of adding 10101 + 01001 is:', options: ['11110', '11000', '10000', '11100'], correct: '11110' },
+        // أسئلة البرمجيات
+        { id: 17, text: 'Which of the following is system software?', options: ['Windows', 'Word', 'Photoshop', 'Chrome'], correct: 'Windows' },
+        { id: 18, text: 'The operating system mainly:', options: ['Manages hardware resources', 'Draws graphics', 'Edits audio files', 'Compiles programs'], correct: 'Manages hardware resources' },
+        { id: 19, text: 'An assembler is used to:', options: ['Translate assembly to machine code', 'Translate machine code to high level', 'Debug code', 'Link program files'], correct: 'Translate assembly to machine code' },
+        { id: 20, text: 'Which of the following is NOT a high-level language?', options: ['Java', 'Python', 'C#', 'Assembly'], correct: 'Assembly' },
+    ].map(q => ({...q, type: 'mcq', scoreValue: 1}));
+
+    // الأسئلة النظرية (Written) - 13 سؤال
+    const writtenQuestions = [
+        { id: 21, text: 'Explain the difference between first-generation and second-generation computers.', modelAnswer: 'First-generation (1940s–1950s) used vacuum tubes, were large, consumed a lot of power, and generated heat. Second-generation (1950s–1960s) used transistors, were smaller, faster, more reliable, and consumed less power.' },
+        { id: 22, text: 'What is meant by computer accuracy, and why is it important?', modelAnswer: 'Accuracy is the ability of a computer to produce correct results. Important because even small errors can cause major problems in calculations, data processing, and decision-making.' },
+        { id: 23, text: 'Describe the function of the Control Unit (CU) inside the CPU.', modelAnswer: 'The CU directs and coordinates the operations of the CPU. It fetches instructions, decodes them, and sends control signals to other components for execution.' },
+        { id: 24, text: 'Describe the role of Cache Memory in a computer system.', modelAnswer: 'Cache is high-speed memory near the CPU. Stores frequently used data and instructions to reduce access time and increase processing speed.' },
+        { id: 25, text: 'List and explain the stages of the Instruction Cycle.', modelAnswer: 'Fetch: Retrieve instruction from memory. Decode: Interpret the instruction. Execute: Perform the operation. Store (optional): Save the result back to memory or registers.' },
+        { id: 26, text: 'What is the function of the BIOS during system startup?', modelAnswer: 'BIOS (Basic Input/Output System) initializes hardware, performs POST (Power-On Self Test), and loads the operating system into RAM.' },
+        { id: 27, text: 'Distinguish between a Supercomputer and a Mainframe computer.', modelAnswer: 'Supercomputer: Extremely fast, used for scientific calculations, simulations, weather forecasting. Mainframe: Large, powerful, handles many users and large-scale transaction processing (banks, airlines).' },
+        { id: 28, text: 'Explain the difference between System Software and Application Software.', modelAnswer: 'System Software: Manages hardware, provides platform for applications (e.g., OS, drivers). Application Software: Helps users perform tasks (e.g., Word, Photoshop).' },
+        { id: 29, text: 'Describe the main role of the Kernel in an operating system.', modelAnswer: 'The Kernel is the core part of the OS, managing CPU, memory, processes, and hardware communication with software.' },
+        { id: 30, text: 'Describe the role of Registers inside the CPU.', modelAnswer: 'Registers are small, high-speed storage locations in the CPU used to temporarily hold data, instructions, or addresses during processing.' },
+        { id: 31, text: 'What is a Bus in computer architecture and what are its main types?', modelAnswer: 'A Bus is a communication pathway for data transfer between CPU, memory, and peripherals. Main types: Data bus, Address bus, Control bus.' },
+        { id: 32, text: 'Explain the difference between the Northbridge and Southbridge chips on a motherboard.', modelAnswer: 'Northbridge: Connects CPU to RAM and GPU, handles high-speed data. Southbridge: Handles I/O devices, storage, and slower peripherals.' },
+        { id: 33, text: 'Describe how increasing the size of RAM affects the performance of a computer.', modelAnswer: 'More RAM allows more programs to run simultaneously and more data to be held in fast memory, reducing reliance on slower storage and improving performance.' },
+    ].map(q => ({...q, type: 'written', scoreValue: 0}));
+
+
+    // --- حالة التطبيق (State) ---
+    const state = {
+        screen: 'loading', // 'loading', 'register', 'exam', 'results'
+        studentName: '',
+        seatNumber: '',
+        timerInterval: null,
+        timeLeft: EXAM_DURATION,
+        answers: {}, // { questionId: answer }
+        mcqScore: 0,
+        sessionId: null, // المعرف الفريد للجلسة
+        examQuestions: [...mcqQuestions, ...writtenQuestions], // جميع الأسئلة
+        isAuthReady: false, // علامة جاهزية Firebase
+        errorMessage: null, // لعرض أخطاء الجلسة
+        explanationCache: {}, // تخزين مؤقت للشروحات التي تم توليدها
+        audioPlayer: new Audio(), // مشغل الصوت
+        audioQuestionId: null, // معرف السؤال الذي يتم تشغيله حاليًا
+    };
+
+    const app = document.getElementById('app');
+
+    // --- إعداد Firebase (نفس الإعداد السابق) ---
+    let db, auth;
+    let userId = 'anonymous'; 
+
+    async function initializeFirebase() {
+        try {
+            setLogLevel('Debug');
+            const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+            
+            if (firebaseConfig) {
+                const appInstance = initializeApp(firebaseConfig);
+                db = getFirestore(appInstance);
+                auth = getAuth(appInstance);
+
+                const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+                
+                // حاول تسجيل الدخول بالرمز المميز المخصص أو مجهول
+                await new Promise(async (resolve, reject) => {
+                    if (initialAuthToken) {
+                        try {
+                            await signInWithCustomToken(auth, initialAuthToken);
+                        } catch (e) {
+                            console.warn("Custom token sign-in failed. Falling back to anonymous.");
+                            await signInAnonymously(auth);
+                        }
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                    resolve();
+                });
+                
+                userId = auth.currentUser?.uid || crypto.randomUUID();
+                state.isAuthReady = true;
+
+                await checkExistingSession();
+
+            } else {
+                // فشل في العثور على تهيئة Firebase. سيتم السماح بالبدء ولكن بدون تخزين دائم.
+                console.error("Firebase config not found. Running in offline/no-persistence mode.");
+                state.isAuthReady = false; 
+                state.screen = 'register';
+                state.errorMessage = 'تحذير: لا يمكن الاتصال بخدمات التخزين. لن يتم حفظ نتائجك.';
+                render();
+            }
+        } catch (e) {
+            // خطأ عام في التهيئة أو الاتصال
+            console.error("Firebase initialization failed:", e);
+            state.errorMessage = `خطأ في الاتصال بخدمة التخزين. ${e.message}`;
+            state.screen = 'register';
+            state.isAuthReady = false; 
+            render();
+        }
+    }
+
+    function getSessionRef(sessionId) {
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        return doc(db, `artifacts/${appId}/public/data/exams`, sessionId);
+    }
+
+    async function saveSession(data) {
+        if (!db || !state.sessionId) return;
+        const sessionRef = getSessionRef(state.sessionId);
+        await setDoc(sessionRef, data, { merge: true });
+    }
+
+    async function loadSession(sessionId) {
+        if (!db) return null;
+        const sessionRef = getSessionRef(sessionId);
+        const sessionSnap = await getDoc(sessionRef);
+        return sessionSnap.exists() ? sessionSnap.data() : null;
+    }
+
+    async function checkExistingSession() {
+        if (!state.isAuthReady || !db) {
+            state.screen = 'register';
+            render();
+            return;
+        }
+
+        const storedSessionId = localStorage.getItem('current_exam_session_id');
+
+        if (storedSessionId) {
+            try {
+                const sessionData = await loadSession(storedSessionId);
+                
+                if (sessionData && sessionData.status === 'completed') {
+                    state.sessionId = storedSessionId;
+                    state.studentName = sessionData.studentName;
+                    state.seatNumber = sessionData.seatNumber;
+                    state.answers = sessionData.answers;
+                    state.mcqScore = sessionData.mcqScore;
+                    state.screen = 'results';
+                } else if (sessionData && sessionData.status === 'active') {
+                    state.sessionId = storedSessionId;
+                    state.studentName = sessionData.studentName;
+                    state.seatNumber = sessionData.seatNumber;
+                    state.answers = sessionData.answers || {};
+                    const elapsedSeconds = Math.floor((new Date() - new Date(sessionData.startTime)) / 1000);
+                    state.timeLeft = Math.max(0, EXAM_DURATION - elapsedSeconds);
+                    
+                    if (state.timeLeft === 0) {
+                        await handleSubmitExam(true); 
+                        return;
+                    }
+
+                    state.screen = 'exam';
+                    startTimer();
+                } else {
+                    state.screen = 'register';
+                }
+            } catch (e) {
+                console.error("Error checking session:", e);
+                state.errorMessage = 'حدث خطأ في استئناف الجلسة. (قد تكون مشكلة اتصال بالشبكة).';
+                state.screen = 'register';
+            }
+        } else {
+            state.screen = 'register';
+        }
+        render();
+    }
+
+
+    // --- منطق المؤقت (Timer) ---
+
+    function startTimer() {
+        if (state.timerInterval) clearInterval(state.timerInterval);
+
+        state.timerInterval = setInterval(() => {
+            if (state.timeLeft > 0) {
+                state.timeLeft--;
+            }
+            
+            if (state.timeLeft <= 0) {
+                clearInterval(state.timerInterval);
+                state.timeLeft = 0;
+                handleSubmitExam(true); // إرسال تلقائي عند انتهاء الوقت
+            }
+            
+            if (state.timeLeft % 10 === 0 && state.screen === 'exam') {
+                saveCurrentAnswers(); 
+            }
+            renderTimer();
+        }, 1000);
+    }
+    
+    function renderTimer() {
+        const timerElement = document.getElementById('timer-display');
+        const saveStatusElement = document.getElementById('save-status');
+
+        if (timerElement) {
+            timerElement.textContent = formatTime(state.timeLeft);
+
+            timerElement.classList.remove('bg-red-600', 'text-white', 'bg-yellow-400', 'text-blue-900', 'bg-red-400', 'animate-pulse');
+
+            if (state.timeLeft <= 60) { 
+                timerElement.classList.add('bg-red-600', 'text-white', 'animate-pulse');
+            } else if (state.timeLeft <= 5 * 60) { 
+                timerElement.classList.add('bg-red-400', 'text-white');
+            } else { 
+                timerElement.classList.add('bg-yellow-400', 'text-blue-900');
+            }
+        }
+    }
+    
+    // --- وظائف مساعدة ---
+
+    function formatTime(totalSeconds) {
+        const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+        const seconds = String(totalSeconds % 60).padStart(2, '0');
+        return `${minutes}:${seconds}`;
+    }
+
+    // --- Gemini API Utilities ---
+    
+    /**
+     * تنفيذ طلب fetch مع آلية التراجع الأسي (Exponential Backoff)
+     */
+    async function fetchWithBackoff(url, options, maxRetries = 5) {
+        let delay = 1000;
+        for (let i = 0; i < maxRetries; i++) {
+            try {
+                const response = await fetch(url, options);
+                if (response.ok) {
+                    return response;
+                }
+                // التعامل مع الأخطاء التي يمكن استردادها (مثل 429 Too Many Requests)
+                if (response.status === 429 || response.status >= 500) {
+                    if (i < maxRetries - 1) {
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        delay *= 2; // مضاعفة التأخير
+                        continue;
+                    }
+                }
+                throw new Error(`API request failed with status ${response.status}: ${await response.text()}`);
+            } catch (error) {
+                if (i < maxRetries - 1 && (error.message.includes('Failed to fetch') || error.message.includes('API request failed'))) {
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    delay *= 2;
+                    continue;
+                }
+                throw error;
+            }
+        }
+        throw new Error("API request failed after all retries.");
+    }
+    
+    // --- ميزة الذكاء الاصطناعي 1: شرح المفهوم (Grounded Search) ---
+    
+    async function callGeminiExplanation(questionText, correctAnswer) {
+        // حماية من الفشل في حال عدم توفر مفتاح API
+        if (!GEMINI_API_KEY) {
+             const explanationDiv = document.getElementById('explanation-content');
+             explanationDiv.innerHTML = '<p class="text-red-500">عذراً، وظيفة الشرح معطلة. مفتاح Gemini API غير متوفر.</p>';
+             return;
+        }
+
+        const query = `اشرح مفهوم: ${correctAnswer} المتعلق بسؤال: ${questionText}`;
+        const systemPrompt = "تولى دور مدرس أكاديمي متمرس في علوم الحاسوب. قدم شرحاً مفصلاً ودقيقاً ومبسطاً للمفهوم المطلوب بناءً على معلومات مستمدة من الويب. يجب أن تكون الإجابة شاملة وموجهة للطالب، وفي حدود فقرتين إلى ثلاث فقرات. إذا كان المفهوم باللغة الإنجليزية، فقدم شرحًا باللغة العربية مع ذكر المصطلح الإنجليزي.";
+        
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`;
+        
+        const payload = {
+            contents: [{ parts: [{ text: query }] }],
+            tools: [{ "google_search": {} }],
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+        };
+
+        const explanationDiv = document.getElementById('explanation-content');
+        const loadingSpinner = document.getElementById('explanation-loading');
+
+        explanationDiv.innerHTML = '';
+        loadingSpinner.classList.remove('hidden');
+
+        try {
+            const response = await fetchWithBackoff(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            
+            const result = await response.json();
+            const candidate = result.candidates?.[0];
+
+            if (candidate && candidate.content?.parts?.[0]?.text) {
+                const text = candidate.content.parts[0].text;
+                let sources = '';
+                
+                const groundingMetadata = candidate.groundingMetadata;
+                if (groundingMetadata && groundingMetadata.groundingAttributions) {
+                    const validSources = groundingMetadata.groundingAttributions
+                        .map(attr => ({ uri: attr.web?.uri, title: attr.web?.title }))
+                        .filter(source => source.uri && source.title);
+                    
+                    if (validSources.length > 0) {
+                        sources = `<div class="mt-4 text-xs text-gray-600 border-t pt-2">
+                                        <p class="font-bold mb-1">المصادر المرجعية (Grounded):</p>
+                                        <ul class="list-disc pr-5 space-y-1">
+                                            ${validSources.map(s => `<li><a href="${s.uri}" target="_blank" class="text-blue-500 hover:underline">${s.title}</a></li>`).join('')}
+                                        </ul>
+                                   </div>`;
+                    }
+                }
+                
+                state.explanationCache[`${questionText}|${correctAnswer}`] = text + sources;
+                explanationDiv.innerHTML = text.replace(/\n/g, '<br>') + sources;
+            } else {
+                explanationDiv.innerHTML = '<p class="text-red-500">عذراً، لم نتمكن من توليد شرح للمفهوم في الوقت الحالي.</p>';
+            }
+
+        } catch (e) {
+            console.error("Gemini API Error:", e);
+            explanationDiv.innerHTML = `<p class="text-red-500">حدث خطأ في الاتصال بخدمة الذكاء الاصطناعي: ${e.message}</p>`;
+        } finally {
+            loadingSpinner.classList.add('hidden');
+        }
+    }
+
+    // --- ميزة الذكاء الاصطناعي 2: قراءة السؤال (TTS) ---
+
+    function base64ToArrayBuffer(base64) {
+        const binaryString = atob(base64);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        return bytes.buffer;
+    }
+
+    function pcmToWav(pcm16, sampleRate) {
+        const numChannels = 1;
+        const bitsPerSample = 16;
+        const pcmData = pcm16.buffer;
+
+        const wav = new ArrayBuffer(44 + pcmData.byteLength);
+        const view = new DataView(wav);
+
+        // RIFF header
+        writeString(view, 0, 'RIFF');
+        view.setUint32(4, 36 + pcmData.byteLength, true);
+        writeString(view, 8, 'WAVE');
+
+        // FMT sub-chunk
+        writeString(view, 12, 'fmt ');
+        view.setUint32(16, 16, true); // Sub-chunk size: 16
+        view.setUint16(20, 1, true); // Audio format (1 for PCM)
+        view.setUint16(22, numChannels, true); // Number of channels
+        view.setUint32(24, sampleRate, true); // Sample rate
+        view.setUint32(28, sampleRate * numChannels * (bitsPerSample / 8), true); // Byte rate
+        view.setUint16(32, numChannels * (bitsPerSample / 8), true); // Block align
+        view.setUint16(34, bitsPerSample, true); // Bits per sample
+
+        // Data sub-chunk
+        writeString(view, 36, 'data');
+        view.setUint32(40, pcmData.byteLength, true);
+
+        // PCM data
+        const pcmBytes = new Uint8Array(pcmData);
+        const dataView = new Uint8Array(wav, 44);
+        dataView.set(pcmBytes);
+
+        return new Blob([wav], { type: 'audio/wav' });
+
+        function writeString(view, offset, string) {
+            for (let i = 0; i < string.length; i++) {
+                view.setUint8(offset + i, string.charCodeAt(i));
+            }
+        }
+    }
+    
+    async function callGeminiTTS(questionText, questionId) {
+         // حماية من الفشل في حال عدم توفر مفتاح API
+        if (!GEMINI_API_KEY) {
+             const button = document.getElementById(`tts-button-${questionId}`);
+             if (button) button.innerHTML = '🎤 TTS معطل';
+             return;
+        }
+
+        state.audioPlayer.pause();
+        const button = document.getElementById(`tts-button-${questionId}`);
+        if (!button) return;
+
+        // حالة الإيقاف/التشغيل
+        if (state.audioQuestionId === questionId) {
+             state.audioQuestionId = null;
+             button.innerHTML = '🎤 استمع للسؤال';
+             return;
+        }
+
+        // إظهار حالة التحميل
+        button.innerHTML = 'جاري التحميل...';
+        button.disabled = true;
+
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${GEMINI_API_KEY}`;
+        const payload = {
+            contents: [{
+                parts: [{ text: `اقرأ بصوت واضح ومحايد: ${questionText}` }]
+            }],
+            generationConfig: {
+                responseModalities: ["AUDIO"],
+                // اختيار صوت مناسب للغة العربية
+                speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } } } 
+            },
+        };
+
+        try {
+            const response = await fetchWithBackoff(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            
+            const result = await response.json();
+            const part = result?.candidates?.[0]?.content?.parts?.[0];
+            const audioData = part?.inlineData?.data;
+            const mimeType = part?.inlineData?.mimeType;
+
+            if (audioData && mimeType && mimeType.startsWith("audio/")) {
+                // استخراج معدل العينة من الـ MIME type (عادة يكون 16000)
+                const sampleRateMatch = mimeType.match(/rate=(\d+)/);
+                const sampleRate = sampleRateMatch ? parseInt(sampleRateMatch[1], 10) : 16000; 
+
+                const pcmData = base64ToArrayBuffer(audioData);
+                const pcm16 = new Int16Array(pcmData);
+                const wavBlob = pcmToWav(pcm16, sampleRate);
+                const audioUrl = URL.createObjectURL(wavBlob);
+                
+                state.audioPlayer.src = audioUrl;
+                
+                // تحديث حالة التشغيل
+                state.audioQuestionId = questionId;
+                state.audioPlayer.play();
+                button.innerHTML = '⏹ إيقاف التشغيل';
+                
+                // إعادة الزر لوضعه الأصلي عند الانتهاء
+                state.audioPlayer.onended = () => {
+                    button.innerHTML = '🎤 استمع للسؤال';
+                    button.disabled = false;
+                    state.audioQuestionId = null;
+                };
+
+            } else {
+                 button.innerHTML = '🎤 خطأ في الصوت';
+                 console.error("Invalid audio data received.");
+            }
+
+        } catch (e) {
+            console.error("Gemini TTS API Error:", e);
+            button.innerHTML = '🎤 خطأ في الاتصال';
+        } finally {
+             // تعطيل الزر يتم التحكم فيه بالكامل داخل الدالة للحالات المختلفة (تحميل، تشغيل، خطأ)
+             if (button.innerHTML.includes('استمع') || button.innerHTML.includes('خطأ')) {
+                button.disabled = false;
+             }
+        }
+    }
+
+
+    // --- معالجات الأحداث (Handlers) ---
+
+    async function handleRegisterSubmit(event) {
+        event.preventDefault();
+        const nameInput = document.getElementById('student-name');
+        const seatInput = document.getElementById('seat-number');
+        const errorMessageDiv = document.getElementById('error-message');
+        
+        const name = nameInput.value.trim();
+        const seat = seatInput.value.trim();
+
+        if (name && seat) {
+            state.errorMessage = null;
+            
+            const newSessionId = crypto.randomUUID();
+
+            const sessionData = {
+                sessionId: newSessionId,
+                studentName: name,
+                seatNumber: seat,
+                questions: state.examQuestions.map(q => ({ id: q.id, type: q.type, text: q.text, options: q.options || [], correct: q.correct || q.modelAnswer })),
+                answers: {},
+                mcqScore: 0,
+                status: 'active', 
+                startTime: new Date().toISOString(),
+                userId: userId, 
+            };
+
+            state.sessionId = newSessionId;
+            state.studentName = name;
+            state.seatNumber = seat;
+            localStorage.setItem('current_exam_session_id', newSessionId);
+
+            if (state.isAuthReady && db) {
+                try {
+                    await saveSession(sessionData);
+                } catch (e) {
+                    console.error("Failed to save session to Firebase:", e);
+                    state.errorMessage = 'فشل في حفظ بيانات الجلسة على السحابة، ستتم المتابعة بدون حفظ دائم.';
+                }
+            }
+
+            state.screen = 'exam';
+            startTimer();
+            render();
+            
+        } else {
+            state.errorMessage = 'الرجاء ملء جميع الحقول المطلوبة.';
+            render();
+        }
+    }
+
+    async function saveCurrentAnswers() {
+        if (state.screen === 'exam' && state.sessionId && state.isAuthReady && db) {
+            try {
+                await saveSession({ answers: state.answers });
+                const statusElement = document.getElementById('save-status');
+                if (statusElement) {
+                    statusElement.textContent = 'تم حفظ الإجابات تلقائيًا.';
+                    statusElement.classList.remove('hidden', 'bg-red-100', 'text-red-700');
+                    statusElement.classList.add('bg-green-100', 'text-green-700');
+                    setTimeout(() => {
+                        statusElement.classList.add('hidden');
+                    }, 3000);
+                }
+            } catch (e) {
+                console.warn("Failed to auto-save answers:", e);
+                const statusElement = document.getElementById('save-status');
+                if (statusElement) {
+                    statusElement.textContent = 'خطأ في الحفظ التلقائي.';
+                    statusElement.classList.remove('hidden', 'bg-green-100', 'text-green-700');
+                    statusElement.classList.add('bg-red-100', 'text-red-700');
+                }
+            }
+        }
+    }
+
+    function handleAnswerChange(questionId, answer) {
+        state.answers[questionId] = answer;
+        if (state.examQuestions.find(q => q.id === questionId)?.type === 'mcq') {
+             saveCurrentAnswers();
+        }
+    }
+
+    async function handleSubmitExam(isTimeout = false) {
+        if (state.timerInterval) clearInterval(state.timerInterval);
+
+        let correctCount = 0;
+        const mcqQ = state.examQuestions.filter(q => q.type === 'mcq');
+        const mcqCount = mcqQ.length;
+
+        mcqQ.forEach(q => {
+            if (state.answers[q.id] === q.correct) {
+                correctCount++;
+            }
+        });
+        state.mcqScore = correctCount;
+
+        if (state.sessionId && db && state.isAuthReady) {
+            try {
+                const sessionRef = getSessionRef(state.sessionId);
+                await setDoc(sessionRef, {
+                    answers: state.answers,
+                    mcqScore: state.mcqScore,
+                    status: 'completed',
+                    endTime: new Date().toISOString(),
+                    submissionType: isTimeout ? 'Timeout' : 'Manual',
+                }, { merge: true });
+            } catch (e) {
+                console.error("Failed to update final session state:", e);
+            }
+        }
+        
+        state.screen = 'results';
+        render();
+    }
+
+
+    // --- وظائف العرض (Render) ---
+
+    function renderLoadingScreen() {
+        app.innerHTML = `
+            <div class="text-center p-10 bg-white rounded-xl shadow-lg mt-20 w-full max-w-lg">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-4 border-blue-600 mx-auto mb-4"></div>
+                <p class="text-xl text-blue-700 font-semibold">جارٍ تهيئة النظام والتحقق من الجلسة...</p>
+                <p class="text-sm text-gray-500 mt-2">يرجى الانتظار قليلاً للتحقق من الاتصال و استئناف أي اختبار سابق.</p>
+            </div>
+        `;
+    }
+
+    function renderRegisterScreen() {
+        app.innerHTML = `
+            <div class="container-card bg-white p-8 md:p-12 rounded-xl border border-gray-200 w-full max-w-lg mx-auto border-t-8 border-indigo-600">
+                <h1 class="text-3xl font-bold text-center text-indigo-800 mb-2">اختبار الحاسوب</h1>
+                <p class="text-center text-gray-600 mb-8">الرجاء تسجيل بياناتك لبدء الاختبار (المدة: 45 دقيقة).</p>
+
+                ${state.errorMessage ? `<p id="error-message" class="text-red-500 text-sm mt-2 text-center bg-red-100 p-2 rounded-lg mb-4">${state.errorMessage}</p>` : `<p id="error-message" class="hidden"></p>`}
+                
+                ${!state.isAuthReady ? `
+                    <div class="p-3 bg-yellow-100 text-yellow-800 rounded-lg text-sm text-center mb-4 border border-yellow-300">
+                         لا يمكن الاتصال بخدمات التخزين الآن. لن يتم حفظ نتائجك تلقائياً عند تقديم الاختبار.
+                    </div>
+                ` : ''}
+
+
+                <form id="register-form" class="space-y-6">
+                    <div>
+                        <label for="student-name" class="block text-lg font-medium text-gray-700 mb-2">الاسم:</label>
+                        <input type="text" id="student-name" name="student-name" required
+                               class="w-full p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150"
+                               placeholder="الاسم الثلاثي للطالب">
+                    </div>
+                    <div>
+                        <label for="seat-number" class="block text-lg font-medium text-gray-700 mb-2">رقم الجلوس:</label>
+                        <input type="text" id="seat-number" name="seat-number" required
+                               class="w-full p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 transition duration-150"
+                               placeholder="رقم الجلوس">
+                    </div>
+                    <button type="submit"
+                            class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg text-xl transition duration-300 transform hover:scale-[1.01] shadow-lg">
+                        ابدأ الاختبار الآن
+                    </button>
+                </form>
+                <div class="mt-4 p-3 bg-blue-100 text-blue-800 rounded-lg text-sm text-center">
+                    <p>ملاحظة: إذا كان الاتصال متاحاً، سيتم تسجيل إجاباتك تلقائيًا في قاعدة البيانات.</p>
+                </div>
+            </div>
+        `;
+        document.getElementById('register-form').addEventListener('submit', handleRegisterSubmit);
+    }
+
+
+    function renderExamScreen() {
+        const mcqQ = state.examQuestions.filter(q => q.type === 'mcq');
+        const writtenQ = state.examQuestions.filter(q => q.type === 'written');
+        const mcqCount = mcqQ.length;
+        const totalQuestions = mcqQ.length + writtenQ.length;
+
+        app.innerHTML = `
+            <!-- شريط علوي (Sticky Header) مع المؤقت وحالة الحفظ -->
+            <div class="header-bar bg-gray-800 text-white p-4 md:p-6 rounded-t-xl flex flex-col md:flex-row justify-between items-center sticky top-0 z-20 shadow-xl">
+                
+                <div class="flex flex-col text-right mb-3 md:mb-0">
+                    <span class="text-sm md:text-base">الطالب: <span class="font-semibold text-yellow-300">${state.studentName}</span></span>
+                    <span class="text-sm md:text-base">رقم الجلوس: <span class="font-semibold text-yellow-300">${state.seatNumber}</span></span>
+                </div>
+                
+                <div class="flex items-center space-x-2 space-x-reverse bg-gray-700 p-2 rounded-xl">
+                    <!-- أيقونة الساعة -->
+                    <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <!-- عرض المؤقت -->
+                    <div class="text-2xl md:text-3xl font-mono timer-display px-3 py-0.5 rounded-lg shadow-inner" id="timer-display">
+                        ${formatTime(state.timeLeft)}
+                    </div>
+                </div>
+
+                <div id="save-status" class="hidden text-xs mt-2 md:mt-0 px-3 py-1 rounded-full"></div>
+            </div>
+
+            <div class="container-card bg-white p-6 md:p-8 rounded-b-xl border border-gray-200 border-t-0">
+                ${!state.isAuthReady ? `
+                    <div class="p-3 bg-red-100 text-red-800 rounded-lg text-sm text-center mb-6 border border-red-300 font-bold">
+                         ⚠️ وضع عدم الاتصال: لن يتم حفظ إجاباتك على السحابة إلا عند الاتصال بالشبكة مرة أخرى. يرجى الحفظ قبل الإغلاق.
+                    </div>
+                ` : ''}
+
+                <h2 class="text-2xl font-bold text-gray-800 mb-8 border-b-2 pb-3 text-indigo-600">
+                    أسئلة الاختبار (مجموع الأسئلة: ${totalQuestions})
+                </h2>
+
+                <form id="exam-form" class="space-y-12">
+                    
+                    <!-- أسئلة الاختيارات -->
+                    <section>
+                        <h3 class="text-xl font-bold text-gray-700 mb-6 p-2 bg-indigo-50 border-r-4 border-indigo-500 rounded">
+                            الجزء الأول: أسئلة الاختيارات المتعددة (${mcqCount} سؤال)
+                        </h3>
+                        ${mcqQ.map((q, index) => `
+                            <div class="question-block p-5 mb-5 border border-gray-200 rounded-lg transition duration-200">
+                                <div class="flex justify-between items-center mb-4">
+                                    <p class="text-lg font-bold text-gray-800">
+                                        <span class="font-extrabold text-indigo-700 ml-2">${index + 1}.</span>
+                                        ${q.text}
+                                    </p>
+                                    <!-- زر قراءة السؤال (TTS) -->
+                                    <button type="button" id="tts-button-${q.id}" onclick="window.callGeminiTTS('${q.text.replace(/'/g, "\\'")}', ${q.id})"
+                                            class="flex items-center text-sm font-semibold bg-blue-500 text-white py-1 px-3 rounded-full hover:bg-blue-600 transition duration-150 shadow-md transform hover:scale-105 disabled:opacity-50">
+                                        🎤 استمع للسؤال
+                                    </button>
+                                </div>
+                                <div class="space-y-3">
+                                    ${q.options.map(option => `
+                                        <label class="flex items-center p-3 rounded-md cursor-pointer hover:bg-indigo-50 transition duration-150 ${state.answers[q.id] === option ? 'user-selected-mcq bg-blue-100' : 'bg-white'}">
+                                            <input type="radio" name="q-${q.id}" value="${option}"
+                                                   class="h-5 w-5 text-indigo-600 focus:ring-indigo-500"
+                                                   onchange="window.handleAnswerChange(${q.id}, this.value)"
+                                                   ${state.answers[q.id] === option ? 'checked' : ''}>
+                                            <span class="mr-3 text-gray-700">${option}</span>
+                                        </label>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </section>
+
+                    <!-- الأسئلة النظرية -->
+                    <section>
+                        <h3 class="text-xl font-bold text-gray-700 mb-6 p-2 bg-indigo-50 border-r-4 border-indigo-500 rounded">
+                            الجزء الثاني: الأسئلة النظرية (${writtenQ.length} سؤال)
+                        </h3>
+                        ${writtenQ.map((q, index) => `
+                            <div class="question-block p-5 mb-5 border border-gray-200 rounded-lg transition duration-200">
+                                <div class="flex justify-between items-center mb-4">
+                                    <p class="text-lg font-bold text-gray-800">
+                                        <span class="font-extrabold text-indigo-700 ml-2">${mcqCount + index + 1}.</span>
+                                        ${q.text}
+                                    </p>
+                                    <!-- زر قراءة السؤال (TTS) -->
+                                     <button type="button" id="tts-button-${q.id}" onclick="window.callGeminiTTS('${q.text.replace(/'/g, "\\'")}', ${q.id})"
+                                            class="flex items-center text-sm font-semibold bg-blue-500 text-white py-1 px-3 rounded-full hover:bg-blue-600 transition duration-150 shadow-md transform hover:scale-105 disabled:opacity-50">
+                                        🎤 استمع للسؤال
+                                    </button>
+                                </div>
+                                <textarea id="q-${q.id}" rows="6"
+                                          class="w-full p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 mt-2 transition duration-150"
+                                          placeholder="أدخل إجابتك المفصلة هنا..."
+                                          oninput="window.handleAnswerChange(${q.id}, this.value)">${state.answers[q.id] || ''}</textarea>
+                                          <p class="text-xs text-gray-500 mt-2">ملاحظة: يتم حفظ الإجابة النظرية تلقائيًا كل 10 ثوانٍ (إذا كان الاتصال متوفراً).</p>
+                            </div>
+                        `).join('')}
+                    </section>
+
+                    <div class="flex justify-center mt-10 pb-4">
+                        <button type="button" onclick="window.handleSubmitExam()"
+                                class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg text-xl transition duration-300 transform hover:scale-[1.01] shadow-xl">
+                            إنهاء الاختبار وتسليم الإجابات
+                        </button>
+                    </div>
+                </form>
+            </div>
+        `;
+        renderTimer();
+    }
+    
+    function renderResultsScreen() {
+        const mcqQ = state.examQuestions.filter(q => q.type === 'mcq');
+        const writtenQ = state.examQuestions.filter(q => q.type === 'written');
+        const mcqCount = mcqQ.length;
+        
+        const percentage = ((state.mcqScore / mcqCount) * 100).toFixed(1);
+        const gradeColor = state.mcqScore >= mcqCount * 0.8 ? 'text-green-600' : state.mcqScore >= mcqCount * 0.5 ? 'text-yellow-600' : 'text-red-600';
+
+        app.innerHTML = `
+            <div class="container-card bg-white p-8 md:p-12 rounded-xl border border-gray-200 w-full mx-auto border-t-8 border-indigo-600">
+                <h1 class="text-4xl font-extrabold text-center text-indigo-800 mb-2">نتائج الاختبار</h1>
+                <p class="text-center text-gray-600 mb-8">تقييم أسئلة الاختيارات ومراجعة الأسئلة النظرية.</p>
+
+                <div class="text-center mb-10 p-6 rounded-xl bg-gray-50 border border-gray-200">
+                    <p class="text-xl text-gray-700">الطالب: <span class="font-bold text-blue-600">${state.studentName}</span></p>
+                    <p class="text-xl text-gray-700">رقم الجلوس: <span class="font-bold text-blue-600">${state.seatNumber}</span></p>
+                    <p class="text-2xl font-bold mt-4 text-gray-800">درجتك في أسئلة الاختيارات:</p>
+                    <p class="text-6xl font-black ${gradeColor} my-4">${state.mcqScore} / ${mcqCount}</p>
+                    <p class="text-xl font-semibold text-gray-600">النسبة المئوية: <span class="${gradeColor} font-extrabold">${percentage}%</span></p>
+                    <p class="text-sm text-red-500 mt-4">ملاحظة: الأسئلة النظرية (الثانية) غير مُقيمة آليًا وتخضع لمراجعة المعلم.</p>
+                </div>
+
+                <!-- قسم الشرح المعزز بالذكاء الاصطناعي -->
+                <div id="explanation-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
+                    <div class="bg-white p-6 rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                        <div class="flex justify-between items-start border-b pb-3 mb-4">
+                            <h3 class="text-2xl font-bold text-indigo-700">شرح المفهوم بواسطة Gemini ✨</h3>
+                            <button onclick="document.getElementById('explanation-modal').classList.add('hidden')" class="text-gray-500 hover:text-gray-800 text-3xl leading-none">&times;</button>
+                        </div>
+                        <div id="explanation-content" class="text-gray-700 text-lg leading-relaxed mb-4"></div>
+                        <div id="explanation-loading" class="hidden text-center p-4">
+                            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500 mx-auto mb-2"></div>
+                            <p class="text-indigo-600">جارٍ البحث وتقديم الشرح المفصل، يرجى الانتظار...</p>
+                        </div>
+                    </div>
+                </div>
+
+
+                <h2 class="text-2xl font-bold text-gray-800 mb-6 border-b pb-3 text-indigo-600">
+                    مراجعة إجابات الاختيارات
+                </h2>
+
+                <div class="space-y-4">
+                    ${mcqQ.map((q, index) => {
+                        const isCorrect = state.answers[q.id] === q.correct;
+                        const cardClass = isCorrect ? 'correct-answer' : 'incorrect-answer';
+                        const userAns = state.answers[q.id] || 'لم تتم الإجابة';
+                        
+                        let correctOptionLetter = '';
+                        q.options.forEach((option, i) => {
+                            if (option === q.correct) {
+                                correctOptionLetter = String.fromCharCode(97 + i); // 97 هو كود 'a'
+                            }
+                        });
+
+                        const explanationKey = `${q.text}|${q.correct}`;
+                        const cachedExplanation = state.explanationCache[explanationKey];
+
+                        return `
+                            <div class="p-4 rounded-lg shadow ${cardClass} transition duration-200">
+                                <div class="flex justify-between items-start">
+                                    <p class="text-lg font-bold text-gray-900 mb-2">
+                                        <span class="font-extrabold text-indigo-700 ml-2">${index + 1}.</span>
+                                        ${q.text}
+                                    </p>
+                                    <button onclick="window.handleExplainClick(${q.id})"
+                                            class="flex items-center text-sm font-semibold bg-indigo-600 text-white py-1 px-3 rounded-full hover:bg-indigo-700 transition duration-150 transform hover:scale-105 whitespace-nowrap">
+                                        ✨ اشرح لي المفهوم
+                                    </button>
+                                </div>
+                                
+                                <p class="text-sm font-semibold ${isCorrect ? 'text-green-700' : 'text-red-700'} mb-2 border-b border-dashed pb-1">
+                                    ${isCorrect ? '✔ الإجابة صحيحة. ' : '✖ الإجابة خاطئة. '}
+                                </p>
+                                <p class="text-sm text-gray-800 mb-1">
+                                    <span class="font-semibold">إجابتك:</span>
+                                    <span class="${!isCorrect && userAns !== 'لم تتم الإجابة' ? 'line-through text-red-500' : ''} ${userAns !== 'لم تتم الإجابة' ? 'p-1 rounded user-selected-mcq bg-blue-100' : 'italic'}">${userAns}</span>
+                                </p>
+                                ${!isCorrect ? `<p class="text-sm text-green-800 font-semibold mt-1">
+                                    <span class="font-semibold">الإجابة الصحيحة (${correctOptionLetter}):</span>
+                                    <span class="font-normal bg-green-200 rounded p-1">${q.correct}</span>
+                                </p>` : ''}
+                                
+                                <!-- عرض الشرح المخزن مؤقتاً -->
+                                ${cachedExplanation ? `
+                                    <div class="mt-4 p-3 bg-indigo-50 border-r-4 border-indigo-400 rounded-lg text-sm text-gray-700">
+                                        <p class="font-bold text-indigo-800 mb-2">شرح المفهوم (مخزن مؤقتاً):</p>
+                                        <div class="text-xs max-h-24 overflow-y-auto">${cachedExplanation}</div>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+
+                <h2 class="text-2xl font-bold text-gray-800 pt-8 mt-10 border-t-2 border-gray-200 mb-6 text-indigo-600">
+                    نموذج إجابة الأسئلة النظرية
+                </h2>
+                <div class="space-y-6">
+                    ${writtenQ.map((q, index) => `
+                        <div class="p-4 rounded-lg border border-gray-300 bg-gray-50 shadow-sm">
+                            <div class="flex justify-between items-start">
+                                <p class="text-lg font-bold text-gray-900 mb-3">
+                                    <span class="font-extrabold text-indigo-700 ml-2">${mcqCount + index + 1}.</span>
+                                    ${q.text}
+                                </p>
+                                <button onclick="window.handleExplainClick(${q.id})"
+                                        class="flex items-center text-sm font-semibold bg-indigo-600 text-white py-1 px-3 rounded-full hover:bg-indigo-700 transition duration-150 transform hover:scale-105 whitespace-nowrap">
+                                    ✨ اشرح لي المفهوم
+                                </button>
+                            </div>
+                            
+                            <div class="mb-3 p-3 rounded bg-blue-100 border-r-4 border-blue-500">
+                                <p class="text-sm font-semibold text-blue-800 mb-1">إجابتك المسجلة:</p>
+                                <p class="text-gray-700 whitespace-pre-wrap">${state.answers[q.id] || 'لم تقم بالإجابة على هذا السؤال.'}</p>
+                            </div>
+                            
+                            <div class="p-3 rounded bg-green-100 border-r-4 border-green-500">
+                                <p class="text-sm font-semibold text-green-800 mb-1">نموذج الإجابة الصحيحة:</p>
+                                <p class="text-gray-700 whitespace-pre-wrap">${q.modelAnswer}</p>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+
+                <div class="flex justify-center mt-10">
+                    <button onclick="window.handleRestart()"
+                            class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-lg text-xl transition duration-300 transform hover:scale-[1.01] shadow-lg">
+                        تسجيل الخروج والبدء من جديد
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+
+    function render() {
+        if (state.screen === 'loading') {
+            renderLoadingScreen();
+        } else if (state.screen === 'register') {
+            renderRegisterScreen();
+        } else if (state.screen === 'exam') {
+            renderExamScreen();
+        } else if (state.screen === 'results') {
+            renderResultsScreen();
+        }
+    }
+    
+    // معالج ضغطة زر الشرح
+    window.handleExplainClick = (questionId) => {
+        const question = state.examQuestions.find(q => q.id === questionId);
+        if (!question) return;
+
+        const correctAns = question.type === 'mcq' ? question.correct : question.modelAnswer;
+        const explanationKey = `${question.text}|${correctAns}`;
+        const cachedExplanation = state.explanationCache[explanationKey];
+
+        const explanationDiv = document.getElementById('explanation-content');
+        const modal = document.getElementById('explanation-modal');
+
+        modal.classList.remove('hidden');
+
+        if (cachedExplanation) {
+            // عرض الشرح المخزن مؤقتاً
+            explanationDiv.innerHTML = cachedExplanation;
+            document.getElementById('explanation-loading').classList.add('hidden');
+        } else {
+            // استدعاء Gemini لتوليد الشرح
+            callGeminiExplanation(question.text, correctAns);
+        }
+    };
+    
+    window.callGeminiTTS = callGeminiTTS;
+    window.handleRestart = () => {
+        localStorage.removeItem('current_exam_session_id');
+        window.location.reload();
+    };
+
+    // تصدير الدوال العامة لمعالجة الأحداث
+    window.handleAnswerChange = handleAnswerChange;
+    window.handleSubmitExam = handleSubmitExam;
+
+    // البدء بتهيئة Firebase عند تحميل الصفحة
+    document.addEventListener('DOMContentLoaded', initializeFirebase);
+
+</script>
+</body>
+</html>
